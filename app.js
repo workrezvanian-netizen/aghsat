@@ -2,7 +2,7 @@
 // همه‌ی منطق اقساط اینجا سمت کلاینت اجرا می‌شه؛ فقط پوش/همگام‌سازی با Worker حرف می‌زنه.
 
 // ⚠️ بعد از دیپلوی Worker (مرحله‌ی ۲ راهنما)، این آدرس رو با آدرس واقعیِ خودت عوض کن:
-const PUSH_WORKER_URL = "https://aghsat2.work-rezvanian.workers.dev";
+const PUSH_WORKER_URL = "https://aghsat2.work-rezvanian.workers.dev".replace(/\/+$/, "");
 
 const REMINDER_DAYS_BEFORE = 3;
 const STORAGE_KEY = "installments_v1";

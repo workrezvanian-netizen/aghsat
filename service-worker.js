@@ -1,10 +1,11 @@
 // سرویس‌ورکر اپ دفترچه اقساط
 // وظایف: کش کردن فایل‌های اصلی برای کارکرد آفلاین + دریافت و نمایش Push Notification
 
-const CACHE_NAME = "installment-pwa-v10";
+const CACHE_NAME = "installment-pwa-v2";
 const CORE_ASSETS = [
   "/",
   "/style.css",
+  "/jalaali.js",
   "/app.js",
   "/manifest.json",
   "/icons/icon-192.png",
@@ -30,11 +31,12 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// استراتژی: شبکه اول برای API، کش اول برای فایل‌های ثابت
+// فقط درخواست‌های GET همین دامنه رو کش می‌کنیم؛ هر چیز دیگه (ازجمله تماس‌های
+// Cross-Origin با Cloudflare Worker) مستقیم از شبکه می‌ره
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
-  if (url.pathname.startsWith("/api/")) {
-    return; // درخواست‌های API همیشه مستقیم از شبکه
+  if (event.request.method !== "GET" || url.origin !== self.location.origin) {
+    return;
   }
   event.respondWith(
     caches.match(event.request).then((cached) => cached || fetch(event.request))
@@ -56,7 +58,7 @@ self.addEventListener("push", (event) => {
     badge: "/icons/icon-192.png",
     dir: "rtl",
     lang: "fa",
-    data: { installmentId: data.installment_id || null },
+    data: { installmentId: data.installmentId || null },
     vibrate: [100, 50, 100],
   };
 
