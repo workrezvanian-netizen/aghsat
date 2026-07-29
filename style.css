@@ -1,0 +1,638 @@
+/* ---------------------------------------------------------------------
+   دفترچه اقساط — سیستم طراحی
+   پالت: کاغذ کِرِم + جوهر سرمه‌ای + برنجی (الهام از دفترچه‌های بانکی)
+--------------------------------------------------------------------- */
+
+:root {
+  --cream: #F5EFE3;
+  --cream-2: #ECE2CC;
+  --paper-line: #DDD0AE;
+  --navy: #1B2A4A;
+  --navy-2: #24365C;
+  --navy-ink: #14213A;
+  --brass: #B08D57;
+  --brass-light: #D9C39B;
+  --red: #B5453D;
+  --red-bg: #F5E2DF;
+  --green: #3F7A5A;
+  --green-bg: #E1EBE2;
+  --ink-soft: #6B6552;
+  --shadow: 0 10px 30px rgba(20, 33, 58, 0.16);
+  --radius-lg: 22px;
+  --radius-md: 14px;
+  --font: "Vazirmatn", "Segoe UI", Tahoma, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+[hidden] {
+  display: none !important;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--cream);
+  color: var(--navy-ink);
+  font-family: var(--font);
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+body {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.app {
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100vh;
+  position: relative;
+  padding-bottom: 100px;
+}
+
+/* ---------------------------- بنر نصب ---------------------------- */
+
+.install-landing {
+  position: fixed;
+  inset: 0;
+  background: var(--navy-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 100;
+}
+
+.install-landing[hidden] {
+  display: none;
+}
+
+.install-landing-card {
+  background: var(--cream);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: 28px 24px calc(24px + env(safe-area-inset-bottom));
+  max-width: 420px;
+  width: 100%;
+  text-align: center;
+}
+
+.install-landing-logo {
+  height: 40px;
+  width: auto;
+  filter: invert(18%) sepia(24%) saturate(1200%) hue-rotate(180deg);
+  margin-bottom: 14px;
+}
+
+.install-landing-card h2 {
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--navy);
+  margin: 0 0 10px;
+}
+
+.install-landing-card p {
+  font-size: 13.5px;
+  line-height: 1.9;
+  color: var(--ink-soft);
+  margin: 0 0 16px;
+}
+
+.install-steps {
+  text-align: right;
+  padding-inline-start: 20px;
+  margin: 0 0 20px;
+  font-size: 13.5px;
+  line-height: 2.1;
+  color: var(--navy-ink);
+}
+
+.install-steps li + li {
+  margin-top: 4px;
+}
+
+/* ---------------------------- کاور ---------------------------- */
+
+.cover {
+  background: linear-gradient(160deg, var(--navy) 0%, var(--navy-2) 100%);
+  color: var(--cream);
+  padding: 34px 24px 40px;
+  padding-top: calc(34px + env(safe-area-inset-top));
+  position: relative;
+  overflow: hidden;
+}
+
+.cover::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 85% -10%, rgba(217,195,155,0.18), transparent 55%);
+  pointer-events: none;
+}
+
+.watermark {
+  position: absolute;
+  top: calc(12px + env(safe-area-inset-top));
+  left: 18px;
+  height: 34px;
+  width: auto;
+  opacity: 0.55;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.settings-btn {
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(245, 239, 227, 0.12);
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.settings-btn:active {
+  background: rgba(245, 239, 227, 0.22);
+}
+
+.cover-actions-row {
+  text-align: left;
+  margin: 4px 0 10px;
+  position: relative;
+  z-index: 1;
+}
+
+.cover-rule {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--brass) 20%, var(--brass) 80%, transparent);
+  opacity: 0.55;
+}
+
+.cover-content {
+  padding: 18px 0 6px;
+  position: relative;
+  z-index: 1;
+}
+
+.cover-eyebrow {
+  display: block;
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  color: var(--brass-light);
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+
+.cover-title {
+  font-size: 44px;
+  font-weight: 800;
+  margin: 0 0 18px;
+  letter-spacing: -0.01em;
+}
+
+/* ---------------------------- خلاصه ماه ---------------------------- */
+
+.summary-card {
+  background: var(--cream);
+  border: 1px solid var(--paper-line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  margin: -28px 20px 8px;
+  padding: 18px 22px;
+  position: relative;
+  z-index: 2;
+}
+
+.summary-label {
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+.summary-amount {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--navy);
+}
+
+.summary-amount .unit {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+
+.summary-split {
+  display: flex;
+  align-items: center;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--paper-line);
+}
+
+.summary-split-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.summary-split-divider {
+  width: 1px;
+  align-self: stretch;
+  background: var(--paper-line);
+  margin: 0 14px;
+}
+
+.summary-split-item .split-label {
+  font-size: 12px;
+  color: var(--ink-soft);
+  font-weight: 500;
+}
+
+.summary-split-item .split-value {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.summary-split-item.is-paid .split-value { color: var(--green); }
+.summary-split-item.is-remaining .split-value { color: var(--red); }
+
+.test-push-link {
+  display: block;
+  margin: 6px auto 2px;
+  background: none;
+  border: none;
+  color: var(--ink-soft);
+  font-family: var(--font);
+  font-size: 12.5px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  padding: 6px;
+}
+
+/* ---------------------------- لیست/دفتر ---------------------------- */
+
+.ledger {
+  padding: 18px 20px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.row {
+  background: var(--cream);
+  border: 1px solid var(--paper-line);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.row::before {
+  /* خط سمت راست ردیف مثل حاشیه‌ی دفترچه */
+  content: "";
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  right: 0;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--brass-light);
+}
+
+.row.is-overdue::before { background: var(--red); }
+.row.is-paid::before { background: var(--green); }
+
+.row-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.row-title {
+  font-weight: 700;
+  font-size: 15.5px;
+  color: var(--navy-ink);
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row-meta {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.row-amount {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--navy);
+  white-space: nowrap;
+}
+
+.row-paid-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--green);
+  margin: 2px 0 4px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.badge-due { background: var(--cream-2); color: var(--ink-soft); }
+.badge-overdue { background: var(--red-bg); color: var(--red); }
+.badge-today { background: #FBEBD8; color: #A3641C; }
+
+.row-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.icon-btn {
+  border: none;
+  background: var(--cream-2);
+  color: var(--navy);
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.icon-btn.pay { color: var(--green); }
+.icon-btn.edit { color: var(--brass); font-size: 13px; }
+.icon-btn.del { color: var(--red); }
+.icon-btn:active { transform: scale(0.94); }
+
+/* مهر پرداخت‌شده — عنصر امضادار طراحی */
+.stamp {
+  position: absolute;
+  top: -10px;
+  left: 10px;
+  transform: rotate(-9deg);
+  border: 2px solid var(--green);
+  color: var(--green);
+  border-radius: 999px;
+  padding: 3px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(63, 122, 90, 0.06);
+  letter-spacing: 0.03em;
+}
+
+/* ---------------------------- حالت خالی ---------------------------- */
+
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--ink-soft);
+}
+
+.empty-icon { font-size: 40px; margin-bottom: 10px; }
+.empty-sub { font-size: 13px; opacity: 0.8; }
+
+/* ---------------------------- دکمه‌ی شناور ---------------------------- */
+
+.fab {
+  position: fixed;
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: var(--navy);
+  color: var(--brass-light);
+  font-size: 28px;
+  border: none;
+  box-shadow: 0 12px 24px rgba(27, 42, 74, 0.35);
+  cursor: pointer;
+  z-index: 10;
+  line-height: 1;
+}
+
+.fab:active { transform: translateX(-50%) scale(0.95); }
+
+/* ---------------------------- شیت افزودن ---------------------------- */
+
+.sheet-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 33, 58, 0.45);
+  display: flex;
+  align-items: flex-end;
+  z-index: 50;
+}
+
+.sheet-overlay[hidden] {
+  display: none;
+}
+
+.sheet {
+  background: var(--cream);
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  border-radius: 24px 24px 0 0;
+  padding: 10px 22px calc(24px + env(safe-area-inset-bottom));
+  max-height: 88vh;
+  overflow-y: auto;
+  animation: sheet-up 0.22s ease-out;
+}
+
+@keyframes sheet-up {
+  from { transform: translateY(30px); opacity: 0.4; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.sheet-handle {
+  width: 40px;
+  height: 4px;
+  background: var(--paper-line);
+  border-radius: 2px;
+  margin: 8px auto 14px;
+}
+
+.sheet h2 {
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--navy);
+  margin: 0 0 16px;
+}
+
+.settings-section {
+  border: 1px solid var(--paper-line);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.settings-subtitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--navy);
+  margin-bottom: 4px;
+}
+
+.settings-version {
+  text-align: center;
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin-bottom: 14px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  color: var(--ink-soft);
+  font-weight: 500;
+}
+
+.field input {
+  font-family: var(--font);
+  font-size: 15px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--paper-line);
+  background: #fff;
+  color: var(--navy-ink);
+  direction: ltr;
+  text-align: right;
+}
+
+.field input:focus {
+  outline: 2px solid var(--brass);
+  outline-offset: 1px;
+}
+
+.field-checkbox {
+  flex-direction: row-reverse;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.field-checkbox input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--navy);
+  flex-shrink: 0;
+}
+
+.field-checkbox span {
+  font-size: 13.5px;
+}
+
+.segmented {
+  display: flex;
+  border: 1px solid var(--paper-line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.seg-btn {
+  flex: 1;
+  border: none;
+  background: #fff;
+  color: var(--ink-soft);
+  padding: 10px 8px;
+  font-family: var(--font);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.seg-btn.active {
+  background: var(--navy);
+  color: var(--cream);
+}
+
+.field-error {
+  color: var(--red);
+  font-size: 12.5px;
+  margin: -6px 0 12px;
+}
+
+.sheet-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.btn {
+  flex: 1;
+  padding: 13px;
+  border-radius: 12px;
+  border: none;
+  font-family: var(--font);
+  font-size: 14.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-primary { background: var(--navy); color: var(--cream); }
+.btn-primary:active { background: var(--navy-2); }
+.btn-ghost { background: var(--cream-2); color: var(--ink-soft); }
+
+/* ---------------------------- توست ---------------------------- */
+
+.toast {
+  position: fixed;
+  bottom: calc(96px + env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--navy-ink);
+  color: var(--cream);
+  padding: 10px 18px;
+  border-radius: 999px;
+  font-size: 13px;
+  z-index: 60;
+  box-shadow: var(--shadow);
+  animation: toast-in 0.18s ease-out;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* ---------------------------- دسترس‌پذیری ---------------------------- */
+
+button:focus-visible, input:focus-visible {
+  outline: 2px solid var(--brass);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet, .toast { animation: none; }
+}

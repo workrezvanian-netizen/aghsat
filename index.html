@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>دفترچه اقساط</title>
+
+<link rel="manifest" href="/manifest.json" />
+<meta name="theme-color" content="#1B2A4A" />
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="دفترچه اقساط" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+
+<div class="app">
+
+  <!-- صفحه‌ی راهنمای نصب: فقط وقتی از سافاری (نه از حالت نصب‌شده) باز شده باشه نشون داده می‌شه -->
+  <div id="installLanding" class="install-landing" hidden>
+    <div class="install-landing-card">
+      <img class="install-landing-logo" src="/icons/watermark-nelin.png" alt="Nelin" />
+      <h2>نصب دفترچه‌ی اقساط</h2>
+      <p>
+        این یه اپ نصب‌شدنیه (PWA). برای استفاده‌ی کامل و دریافتِ یادآوریِ پوش،
+        اول باید به صفحه‌ی اصلی گوشیت اضافه‌ش کنی:
+      </p>
+      <ol class="install-steps">
+        <li>پایین سافاری، دکمه‌ی <strong>اشتراک‌گذاری ⬆️</strong> رو بزن</li>
+        <li>گزینه‌ی <strong>Add to Home Screen</strong> رو انتخاب کن</li>
+        <li>از این به بعد، اپ رو از روی همون آیکونِ تازه‌نصب‌شده باز کن (نه از سافاری)</li>
+      </ol>
+      <button id="installLandingContinue" class="btn btn-primary">فهمیدم، همینجا نگاه کنم</button>
+    </div>
+  </div>
+
+  <header class="cover">
+    <img class="watermark" src="/icons/watermark-nelin.png" alt="Nelin" />
+    <div class="cover-rule"></div>
+    <div class="cover-content">
+      <span class="cover-eyebrow">دفترچه</span>
+      <h1 class="cover-title">اقساط</h1>
+    </div>
+    <div class="cover-actions-row">
+      <button id="settingsBtn" class="settings-btn" aria-label="تنظیمات">⚙️</button>
+    </div>
+    <div class="cover-rule"></div>
+  </header>
+
+  <section class="summary-card" id="summaryCard">
+    <div class="summary-label">مجموع این ماه — <span id="summaryMonth">—</span></div>
+    <div class="summary-amount"><span id="summaryTotal">۰</span> <span class="unit">تومان</span></div>
+
+    <div class="summary-split">
+      <div class="summary-split-item is-paid">
+        <span class="split-label">پرداخت‌شده</span>
+        <span class="split-value"><span id="summaryPaid">۰</span> تومان</span>
+      </div>
+      <div class="summary-split-divider"></div>
+      <div class="summary-split-item is-remaining">
+        <span class="split-label">باقی‌مانده</span>
+        <span class="split-value"><span id="summaryRemaining">۰</span> تومان</span>
+      </div>
+    </div>
+  </section>
+
+  <main class="ledger" id="ledger">
+    <!-- ردیف‌های قسط این‌جا با JS اضافه می‌شن -->
+  </main>
+
+  <div class="empty-state" id="emptyState" hidden>
+    <div class="empty-icon">📖</div>
+    <p>هنوز قسطی توی دفترچه ثبت نشده.</p>
+    <p class="empty-sub">با دکمه‌ی + یه قسط جدید اضافه کن.</p>
+  </div>
+
+  <button id="fab" class="fab" aria-label="افزودن قسط">+</button>
+
+</div>
+
+<!-- شیت افزودن/ویرایش قسط -->
+<div id="sheetOverlay" class="sheet-overlay" hidden>
+  <div class="sheet" role="dialog" aria-labelledby="sheetTitle">
+    <div class="sheet-handle"></div>
+    <h2 id="sheetTitle">قسط جدید</h2>
+
+    <form id="addForm">
+      <label class="field">
+        <span>عنوان</span>
+        <input type="text" id="fTitle" placeholder="مثلا: قسط وام بانک" required maxlength="60" />
+      </label>
+
+      <label class="field">
+        <span>مبلغ (تومان)</span>
+        <input type="number" id="fAmount" placeholder="2500000" inputmode="numeric" required min="0" />
+      </label>
+
+      <div class="field">
+        <span>نوع قسط</span>
+        <div class="segmented" id="typeSegment">
+          <button type="button" class="seg-btn active" data-type="monthly">🔁 ماهانه</button>
+          <button type="button" class="seg-btn" data-type="once">📆 یک‌باره</button>
+        </div>
+      </div>
+
+      <label class="field" id="monthlyField">
+        <span>چندم هر ماه شمسی سررسیده؟ (۱ تا ۲۹)</span>
+        <input type="number" id="fDueDay" min="1" max="29" placeholder="15" required />
+      </label>
+
+      <label class="field" id="onceField" hidden>
+        <span>تاریخ سررسید (شمسی — YYYY-MM-DD)</span>
+        <input type="text" id="fDueDate" placeholder="1405-05-24" pattern="[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}" />
+      </label>
+
+      <label class="field field-checkbox">
+        <input type="checkbox" id="fCustomCount" />
+        <span>شماره‌ی قسط رو دستی تنظیم کنم (پیش‌فرض: از قسط اول شروع می‌شه)</span>
+      </label>
+
+      <label class="field" id="paidCountField" hidden>
+        <span>این قسط از کجا شروع بشه؟ (مثلاً اگه می‌خوای بعدی «قسط پنجم» باشه، بنویس 4)</span>
+        <input type="number" id="fPaidCount" placeholder="0" inputmode="numeric" min="0" />
+      </label>
+
+      <label class="field field-checkbox">
+        <input type="checkbox" id="fCustomHour" />
+        <span>ساعت یادآوری رو دستی تنظیم کنم (پیش‌فرض: ۹ صبح)</span>
+      </label>
+
+      <label class="field" id="reminderHourField" hidden>
+        <span>یادآوری ساعت چند ارسال بشه؟ (۰ تا ۲۳، به‌وقت ایران)</span>
+        <input type="number" id="fReminderHour" placeholder="9" inputmode="numeric" min="0" max="23" />
+      </label>
+
+      <p class="field-error" id="formError" hidden></p>
+
+      <div class="sheet-actions">
+        <button type="button" class="btn btn-ghost" id="cancelBtn">انصراف</button>
+        <button type="submit" class="btn btn-primary" id="submitBtn">ثبت قسط</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- شیت تنظیمات -->
+<div id="settingsOverlay" class="sheet-overlay" hidden>
+  <div class="sheet" role="dialog" aria-labelledby="settingsTitle">
+    <div class="sheet-handle"></div>
+    <h2 id="settingsTitle">تنظیمات</h2>
+
+    <div class="settings-section">
+      <span class="settings-subtitle">نوتیفیکیشن</span>
+      <button id="testPushBtn" class="test-push-link">🔔 تست یادآوری</button>
+      <button id="reactivatePushBtn" class="test-push-link">🔄 فعال‌سازی مجدد نوتیفیکیشن</button>
+    </div>
+
+    <div class="settings-version">نسخه‌ی نرم‌افزار ۱.۰۱</div>
+
+    <div class="sheet-actions">
+      <button type="button" class="btn btn-ghost" id="settingsCloseBtn">بستن</button>
+    </div>
+  </div>
+</div>
+
+<!-- توست پیام کوتاه -->
+<div id="toast" class="toast" hidden></div>
+
+<script src="/jalaali.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,679 @@
+// دفترچه اقساط — نسخه‌ی Cloudflare (بدون بک‌اند Flask)
+// همه‌ی منطق اقساط اینجا سمت کلاینت اجرا می‌شه؛ فقط پوش/همگام‌سازی با Worker حرف می‌زنه.
+
+// ⚠️ بعد از دیپلوی Worker (مرحله‌ی ۲ راهنما)، این آدرس رو با آدرس واقعیِ خودت عوض کن:
+const PUSH_WORKER_URL = "https://installment-pwa-push.YOUR-SUBDOMAIN.workers.dev";
+
+const REMINDER_DAYS_BEFORE = 3;
+const STORAGE_KEY = "installments_v1";
+
+// ---------------------------------------------------------------------
+// شناسه‌ی دستگاه (جایگزین ساده‌ی لاگین، مخصوص استفاده‌ی شخصی روی یه گوشی)
+// ---------------------------------------------------------------------
+
+function getDeviceId() {
+  let id = localStorage.getItem("device_id");
+  if (!id) {
+    id = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
+    localStorage.setItem("device_id", id);
+  }
+  return id;
+}
+
+// ---------------------------------------------------------------------
+// دیتای محلی (جایگزین دیتابیس/Flask قبلی)
+// ---------------------------------------------------------------------
+
+function todayIso() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+function loadRaw() {
+  try {
+    const arr = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveRaw(arr) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
+}
+
+function newId() {
+  return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+}
+
+// معادل installment_to_dict قبلی
+function toDict(row, today) {
+  const due = Jalaali.thisMonthDueDate(row.due_type, row.due_value, today);
+  const daysLeft = Jalaali.isoDiffDays(due, today);
+  return {
+    id: row.id,
+    title: row.title,
+    amount: row.amount,
+    due_type: row.due_type,
+    due_value: row.due_value,
+    due_jalali: Jalaali.formatJalali(due),
+    due_key: due,
+    days_left: daysLeft,
+    is_paid: row.paid_due_date === due,
+    is_overdue: daysLeft < 0 && row.paid_due_date !== due,
+    paid_count: row.paid_count || 0,
+    reminder_hour: row.reminder_hour ?? 9,
+  };
+}
+
+function validateInput(data) {
+  const title = (data.title || "").trim();
+  const amount = String(data.amount || "").trim();
+  const dueType = data.due_type;
+  const rawDueValue = String(data.due_value || "").trim();
+
+  if (!title || (dueType !== "once" && dueType !== "monthly") || !rawDueValue) {
+    throw new Error("اطلاعات ناقصه");
+  }
+
+  let dueValue;
+  if (dueType === "once") {
+    try {
+      dueValue = Jalaali.parseJalaliDate(rawDueValue);
+    } catch (e) {
+      throw new Error("تاریخ شمسی نامعتبره، به فرمت YYYY-MM-DD بنویس");
+    }
+  } else {
+    const day = parseInt(rawDueValue, 10);
+    if (!rawDueValue.match(/^\d+$/) || day < 1 || day > 29) {
+      throw new Error("روز باید بین ۱ تا ۲۹ باشه");
+    }
+    dueValue = rawDueValue;
+  }
+
+  let paidCount = parseInt(data.paid_count, 10);
+  if (Number.isNaN(paidCount) || paidCount < 0) paidCount = 0;
+
+  let reminderHour = parseInt(data.reminder_hour, 10);
+  if (Number.isNaN(reminderHour) || reminderHour < 0 || reminderHour > 23) reminderHour = 9;
+
+  return { title, amount, due_type: dueType, due_value: dueValue, paid_count: paidCount, reminder_hour: reminderHour };
+}
+
+const store = {
+  add(data) {
+    const clean = validateInput(data);
+    const rows = loadRaw();
+    rows.push({
+      id: newId(),
+      ...clean,
+      paid_due_date: null,
+      last_notified: null,
+      created_at: new Date().toISOString(),
+    });
+    saveRaw(rows);
+  },
+
+  update(id, data) {
+    const clean = validateInput(data);
+    const rows = loadRaw();
+    const idx = rows.findIndex((r) => r.id === id);
+    if (idx === -1) throw new Error("قسط پیدا نشد");
+    // چون سررسید ممکنه عوض شده باشه، وضعیت پرداخت/یادآوریِ قبلی رو ریست می‌کنیم
+    rows[idx] = {
+      ...rows[idx],
+      ...clean,
+      paid_due_date: null,
+      last_notified: null,
+    };
+    saveRaw(rows);
+  },
+
+  remove(id) {
+    const rows = loadRaw().filter((r) => r.id !== id);
+    saveRaw(rows);
+  },
+
+  pay(id, dueKey) {
+    const rows = loadRaw();
+    const row = rows.find((r) => r.id === id);
+    if (!row) throw new Error("قسط پیدا نشد");
+    if (row.paid_due_date !== dueKey) {
+      row.paid_count = (row.paid_count || 0) + 1;
+    }
+    row.paid_due_date = dueKey;
+    saveRaw(rows);
+    return row.paid_count;
+  },
+
+  list() {
+    const today = todayIso();
+    const { nextMonthStart } = Jalaali.currentJalaliMonthBounds(today);
+    const items = [];
+    for (const row of loadRaw()) {
+      const item = toDict(row, today);
+      let include;
+      if (row.due_type === "monthly") {
+        include = true; // سررسیدش همیشه همین ماهه (رول نمی‌خوره)
+      } else {
+        include = item.due_key < nextMonthStart; // همین ماه یا قبل‌تر، نه ماه‌های بعد
+      }
+      if (include) items.push(item);
+    }
+    items.sort((a, b) => (a.due_key < b.due_key ? -1 : a.due_key > b.due_key ? 1 : 0));
+    return items;
+  },
+
+  monthlyTotal() {
+    const today = todayIso();
+    const { monthStart, nextMonthStart } = Jalaali.currentJalaliMonthBounds(today);
+    const monthName = Jalaali.currentJalaliMonthName(today);
+
+    let total = 0;
+    let paidTotal = 0;
+    const items = [];
+    for (const row of loadRaw()) {
+      let included;
+      if (row.due_type === "monthly") {
+        included = true;
+      } else {
+        included = row.due_value >= monthStart && row.due_value < nextMonthStart;
+      }
+      if (!included) continue;
+      const amount = parseInt(row.amount, 10) || 0;
+      total += amount;
+      const item = toDict(row, today);
+      if (item.is_paid) paidTotal += amount;
+      items.push({ title: row.title, amount: row.amount });
+    }
+    return { month_name: monthName, total, paid_total: paidTotal, remaining_total: total - paidTotal, items };
+  },
+};
+
+// ---------------------------------------------------------------------
+// همگام‌سازی با Worker (فقط برای اینکه Cron بتونه یادآوری بفرسته)
+// ---------------------------------------------------------------------
+
+async function pushApi(path, options = {}) {
+  const res = await fetch(`${PUSH_WORKER_URL}${path}`, {
+    ...options,
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `خطای ${res.status}`);
+  }
+  return res.json();
+}
+
+async function syncToServer() {
+  try {
+    const registration = await navigator.serviceWorker.getRegistration();
+    const sub = registration ? await registration.pushManager.getSubscription() : null;
+    await pushApi("/sync", {
+      method: "POST",
+      body: JSON.stringify({
+        deviceId: getDeviceId(),
+        subscription: sub ? sub.toJSON() : undefined,
+        installments: loadRaw(),
+      }),
+    });
+  } catch (e) {
+    /* بی‌صدا؛ دفعه‌ی بعد که چیزی عوض بشه دوباره امتحان می‌شه */
+  }
+}
+
+// ---------------------------------------------------------------------
+// توست
+// ---------------------------------------------------------------------
+
+let toastTimer;
+function showToast(msg) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => (el.hidden = true), 2200);
+}
+
+// ---------------------------------------------------------------------
+// رندر لیست
+// ---------------------------------------------------------------------
+
+let currentItems = [];
+
+function formatAmount(amount) {
+  const n = parseInt(amount, 10);
+  if (Number.isNaN(n)) return amount || "0";
+  return n.toLocaleString("en-US");
+}
+
+function statusBadge(item) {
+  if (item.is_paid) return "";
+  if (item.days_left < 0) return `<span class="badge badge-overdue">${Math.abs(item.days_left)} روز گذشته ⚠️</span>`;
+  if (item.days_left === 0) return `<span class="badge badge-today">امروز 🔥</span>`;
+  return `<span class="badge badge-due">${item.days_left} روز مانده</span>`;
+}
+
+const PERSIAN_DIGITS = ["۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"];
+function toPersianDigits(n) {
+  return String(n).replace(/[0-9]/g, (d) => PERSIAN_DIGITS[d]);
+}
+
+const ORDINAL_UNITS = ["", "اول", "دوم", "سوم", "چهارم", "پنجم", "ششم", "هفتم", "هشتم", "نهم"];
+const ORDINAL_UNITS_COMPOUND = ["", "یکم", "دوم", "سوم", "چهارم", "پنجم", "ششم", "هفتم", "هشتم", "نهم"];
+const ORDINAL_TEENS = ["دهم", "یازدهم", "دوازدهم", "سیزدهم", "چهاردهم", "پانزدهم", "شانزدهم", "هفدهم", "هجدهم", "نوزدهم"];
+const ORDINAL_TENS = ["", "", "بیستم", "سی‌ام", "چهلم", "پنجاهم", "شصتم", "هفتادم", "هشتادم", "نودم"];
+const TENS_PREFIX = ["", "", "بیست", "سی", "چهل", "پنجاه", "شصت", "هفتاد", "هشتاد", "نود"];
+
+function toPersianOrdinal(n) {
+  if (!Number.isInteger(n) || n < 1) return "";
+  if (n > 99) return `شماره ${toPersianDigits(n)}`;
+  if (n <= 9) return ORDINAL_UNITS[n];
+  if (n <= 19) return ORDINAL_TEENS[n - 10];
+  if (n % 10 === 0) return ORDINAL_TENS[Math.floor(n / 10)];
+  return `${TENS_PREFIX[Math.floor(n / 10)]} و ${ORDINAL_UNITS_COMPOUND[n % 10]}`;
+}
+
+function renderInstallments(items) {
+  currentItems = items;
+
+  const ledger = document.getElementById("ledger");
+  const empty = document.getElementById("emptyState");
+  ledger.innerHTML = "";
+
+  if (!items.length) {
+    empty.hidden = false;
+    return;
+  }
+  empty.hidden = true;
+
+  for (const item of items) {
+    const row = document.createElement("div");
+    row.className = "row";
+    if (item.is_paid) row.classList.add("is-paid");
+    else if (item.days_left < 0) row.classList.add("is-overdue");
+
+    const typeLabel = item.due_type === "monthly" ? "🔁 ماهانه" : "📆 یک‌باره";
+
+    row.innerHTML = `
+      ${item.is_paid ? `<div class="stamp">پرداخت شد ✓</div>` : ""}
+      <div class="row-main">
+        <div class="row-title">${escapeHtml(item.title)}</div>
+        <div class="row-meta">
+          <span>${typeLabel}</span>
+          <span>•</span>
+          <span>${item.due_jalali}</span>
+          ${statusBadge(item)}
+        </div>
+        ${item.is_paid && item.paid_count > 0 ? `<div class="row-paid-count">قسط ${toPersianOrdinal(item.paid_count)}</div>` : ""}
+        <div class="row-amount">${formatAmount(item.amount)} تومان</div>
+      </div>
+      <div class="row-actions">
+        ${!item.is_paid ? `<button class="icon-btn pay" title="ثبت پرداخت" data-action="pay" data-id="${item.id}" data-due="${item.due_key}">✓</button>` : ""}
+        <button class="icon-btn edit" title="ویرایش" data-action="edit" data-id="${item.id}">✏️</button>
+        <button class="icon-btn del" title="حذف" data-action="del" data-id="${item.id}">🗑</button>
+      </div>
+    `;
+    ledger.appendChild(row);
+  }
+}
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function loadInstallments() {
+  try {
+    renderInstallments(store.list());
+  } catch (e) {
+    showToast("خطا در بارگذاری لیست: " + e.message);
+  }
+}
+
+function loadMonthlyTotal() {
+  try {
+    const data = store.monthlyTotal();
+    document.getElementById("summaryMonth").textContent = data.month_name;
+    document.getElementById("summaryTotal").textContent = formatAmount(String(data.total));
+    document.getElementById("summaryPaid").textContent = formatAmount(String(data.paid_total));
+    document.getElementById("summaryRemaining").textContent = formatAmount(String(data.remaining_total));
+  } catch (e) {
+    /* خطای غیرحیاتی، لیست اصلی همچنان کار می‌کنه */
+  }
+}
+
+function refreshAll() {
+  loadInstallments();
+  loadMonthlyTotal();
+}
+
+// ---------------------------------------------------------------------
+// اکشن‌های ردیف (پرداخت / ویرایش / حذف)
+// ---------------------------------------------------------------------
+
+document.getElementById("ledger").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-action]");
+  if (!btn) return;
+  const id = btn.dataset.id;
+
+  if (btn.dataset.action === "pay") {
+    try {
+      const paidCount = store.pay(id, btn.dataset.due);
+      showToast(`پرداخت ثبت شد ✅ — قسط شماره ${paidCount}`);
+      refreshAll();
+      syncToServer();
+    } catch (err) {
+      showToast("خطا: " + err.message);
+    }
+  }
+
+  if (btn.dataset.action === "edit") {
+    const item = currentItems.find((i) => String(i.id) === String(id));
+    if (item) openEditSheet(item);
+  }
+
+  if (btn.dataset.action === "del") {
+    if (!confirm("این قسط حذف بشه؟")) return;
+    try {
+      store.remove(id);
+      showToast("حذف شد 🗑");
+      refreshAll();
+      syncToServer();
+    } catch (err) {
+      showToast("خطا: " + err.message);
+    }
+  }
+});
+
+// ---------------------------------------------------------------------
+// شیت افزودن/ویرایش قسط
+// ---------------------------------------------------------------------
+
+const sheetOverlay = document.getElementById("sheetOverlay");
+const addForm = document.getElementById("addForm");
+let currentType = "monthly";
+let editingId = null;
+
+function setCustomCountVisible(visible) {
+  document.getElementById("fCustomCount").checked = visible;
+  document.getElementById("paidCountField").hidden = !visible;
+}
+
+function setCustomHourVisible(visible) {
+  document.getElementById("fCustomHour").checked = visible;
+  document.getElementById("reminderHourField").hidden = !visible;
+}
+
+function openAddSheet() {
+  addForm.reset();
+  editingId = null;
+  document.getElementById("sheetTitle").textContent = "قسط جدید";
+  document.getElementById("submitBtn").textContent = "ثبت قسط";
+  currentType = "monthly";
+  setType("monthly");
+  document.getElementById("fPaidCount").value = 0;
+  setCustomCountVisible(false);
+  document.getElementById("fReminderHour").value = 9;
+  setCustomHourVisible(false);
+  document.getElementById("formError").hidden = true;
+  sheetOverlay.hidden = false;
+}
+
+function openEditSheet(item) {
+  addForm.reset();
+  editingId = item.id;
+  document.getElementById("sheetTitle").textContent = "ویرایش قسط";
+  document.getElementById("submitBtn").textContent = "ذخیره تغییرات";
+
+  document.getElementById("fTitle").value = item.title;
+  document.getElementById("fAmount").value = item.amount;
+  setType(item.due_type);
+
+  if (item.due_type === "monthly") {
+    document.getElementById("fDueDay").value = item.due_value;
+  } else {
+    document.getElementById("fDueDate").value = item.due_jalali.replace(/\//g, "-");
+  }
+
+  document.getElementById("fPaidCount").value = item.paid_count || 0;
+  setCustomCountVisible(!!item.paid_count);
+
+  document.getElementById("fReminderHour").value = item.reminder_hour ?? 9;
+  setCustomHourVisible(item.reminder_hour !== undefined && item.reminder_hour !== 9);
+
+  document.getElementById("formError").hidden = true;
+  sheetOverlay.hidden = false;
+}
+
+function closeSheet() {
+  sheetOverlay.hidden = true;
+  editingId = null;
+}
+
+document.getElementById("fab").addEventListener("click", openAddSheet);
+document.getElementById("cancelBtn").addEventListener("click", closeSheet);
+
+sheetOverlay.addEventListener("click", (e) => {
+  if (e.target === sheetOverlay) closeSheet();
+});
+
+// ---------------------------------------------------------------------
+// شیت تنظیمات
+// ---------------------------------------------------------------------
+
+const settingsOverlay = document.getElementById("settingsOverlay");
+
+function openSettingsSheet() {
+  settingsOverlay.hidden = false;
+}
+
+function closeSettingsSheet() {
+  settingsOverlay.hidden = true;
+}
+
+document.getElementById("settingsBtn").addEventListener("click", openSettingsSheet);
+document.getElementById("settingsCloseBtn").addEventListener("click", closeSettingsSheet);
+
+settingsOverlay.addEventListener("click", (e) => {
+  if (e.target === settingsOverlay) closeSettingsSheet();
+});
+
+function setType(type) {
+  currentType = type;
+  document.querySelectorAll(".seg-btn").forEach((b) => {
+    b.classList.toggle("active", b.dataset.type === type);
+  });
+  document.getElementById("monthlyField").hidden = type !== "monthly";
+  document.getElementById("onceField").hidden = type !== "once";
+  document.getElementById("fDueDay").required = type === "monthly";
+  document.getElementById("fDueDate").required = type === "once";
+}
+
+document.getElementById("typeSegment").addEventListener("click", (e) => {
+  const btn = e.target.closest(".seg-btn");
+  if (btn) setType(btn.dataset.type);
+});
+
+document.getElementById("fCustomCount").addEventListener("change", (e) => {
+  document.getElementById("paidCountField").hidden = !e.target.checked;
+});
+
+document.getElementById("fCustomHour").addEventListener("change", (e) => {
+  document.getElementById("reminderHourField").hidden = !e.target.checked;
+});
+
+addForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const errEl = document.getElementById("formError");
+  errEl.hidden = true;
+
+  const title = document.getElementById("fTitle").value.trim();
+  const amount = document.getElementById("fAmount").value.trim();
+  const dueValue =
+    currentType === "monthly"
+      ? document.getElementById("fDueDay").value.trim()
+      : document.getElementById("fDueDate").value.trim();
+  const paidCount = document.getElementById("fCustomCount").checked
+    ? (parseInt(document.getElementById("fPaidCount").value.trim(), 10) || 0)
+    : 0;
+  const reminderHour = document.getElementById("fCustomHour").checked
+    ? (parseInt(document.getElementById("fReminderHour").value.trim(), 10) || 9)
+    : 9;
+
+  try {
+    const payload = { title, amount, due_type: currentType, due_value: dueValue, paid_count: paidCount, reminder_hour: reminderHour };
+    if (editingId) {
+      store.update(editingId, payload);
+      showToast("قسط ویرایش شد ✅");
+    } else {
+      store.add(payload);
+      showToast("قسط ثبت شد ✅");
+    }
+    closeSheet();
+    refreshAll();
+    syncToServer();
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.hidden = false;
+  }
+});
+
+// ---------------------------------------------------------------------
+// نصب و نوتیفیکیشن Push
+// ---------------------------------------------------------------------
+
+function isStandalone() {
+  return (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    window.navigator.standalone === true
+  );
+}
+
+if (!isStandalone()) {
+  document.getElementById("installLanding").hidden = false;
+}
+
+document.getElementById("installLandingContinue").addEventListener("click", () => {
+  document.getElementById("installLanding").hidden = true;
+});
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
+}
+
+async function fetchVapidKey() {
+  const res = await fetch(`${PUSH_WORKER_URL}/vapid-public-key`);
+  if (!res.ok) throw new Error(`خطای ${res.status}`);
+  return res.text();
+}
+
+async function setupNotifications() {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+    return; // مرورگر پشتیبانی نمی‌کنه (نسخه‌های قدیمی iOS)
+  }
+
+  const registration = await navigator.serviceWorker.register("/service-worker.js");
+
+  if (!isStandalone()) {
+    return; // راهنمای نصب همون اول اسکریپت جدا نشون داده می‌شه
+  }
+
+  const existing = await registration.pushManager.getSubscription();
+  if (existing) {
+    // هر بار اپ باز می‌شه دوباره sync می‌کنیم (هم subscription هم لیست اقساط)
+    syncToServer();
+    return;
+  }
+
+  if (Notification.permission === "denied") return;
+  if (localStorage.getItem("notify_asked")) return;
+
+  document.addEventListener(
+    "click",
+    () => requestNotificationPermission(registration),
+    { once: true }
+  );
+}
+
+async function requestNotificationPermission(registration) {
+  localStorage.setItem("notify_asked", "1");
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") return;
+    await subscribeAndSend(registration);
+    showToast("یادآوری فعال شد ✅");
+  } catch (err) {
+    showToast("خطا در فعال‌سازی یادآوری: " + err.message);
+  }
+}
+
+async function subscribeAndSend(registration) {
+  const key = await fetchVapidKey();
+  const sub = await registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(key),
+  });
+  await syncToServer();
+  return sub;
+}
+
+async function reactivatePush() {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+    showToast("این مرورگر پشتیبانی نمی‌کنه");
+    return;
+  }
+  try {
+    const registration = await navigator.serviceWorker.ready;
+
+    if (Notification.permission !== "granted") {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        showToast("اجازه‌ی نوتیفیکیشن داده نشد");
+        return;
+      }
+    }
+
+    const existing = await registration.pushManager.getSubscription();
+    if (existing) await existing.unsubscribe();
+    await subscribeAndSend(registration);
+    localStorage.setItem("notify_asked", "1");
+    showToast("نوتیفیکیشن دوباره فعال شد ✅ — حالا یه‌بار «تست یادآوری» رو بزن");
+  } catch (err) {
+    showToast("خطا در فعال‌سازی مجدد: " + err.message);
+  }
+}
+
+document.getElementById("testPushBtn").addEventListener("click", async () => {
+  try {
+    const result = await pushApi("/test", {
+      method: "POST",
+      body: JSON.stringify({ deviceId: getDeviceId() }),
+    });
+    if (result.ok) {
+      showToast("پوش آزمایشی فرستاده شد ✅ — چند ثانیه صبر کن");
+    } else {
+      showToast("subscription منقضی شده ❌ — «فعال‌سازی مجدد نوتیفیکیشن» رو بزن");
+    }
+  } catch (err) {
+    if (err.message.includes("no subscription")) {
+      showToast("subscriptionی ثبت نشده ❌ — «فعال‌سازی مجدد نوتیفیکیشن» رو بزن");
+    } else {
+      showToast("خطا: " + err.message);
+    }
+  }
+});
+
+document.getElementById("reactivatePushBtn").addEventListener("click", reactivatePush);
+
+// ---------------------------------------------------------------------
+// شروع
+// ---------------------------------------------------------------------
+
+refreshAll();
+setupNotifications();
