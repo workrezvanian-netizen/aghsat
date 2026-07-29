@@ -265,16 +265,23 @@ body {
 
 .test-push-link {
   display: block;
-  margin: 6px auto 2px;
-  background: none;
-  border: none;
-  color: var(--ink-soft);
+  width: 100%;
+  margin: 6px 0 0;
+  background: var(--cream-2);
+  border: 1px solid var(--paper-line);
+  border-radius: 12px;
+  color: var(--navy-ink);
   font-family: var(--font);
-  font-size: 12.5px;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-decoration: none;
   cursor: pointer;
-  padding: 6px;
+  padding: 11px;
+  text-align: center;
+}
+
+.test-push-link:active {
+  background: var(--paper-line);
 }
 
 /* ---------------------------- لیست/دفتر ---------------------------- */
