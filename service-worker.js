@@ -1,7 +1,7 @@
 // سرویس‌ورکر اپ دفترچه اقساط
 // وظایف: کش کردن فایل‌های اصلی برای کارکرد آفلاین + دریافت و نمایش Push Notification
 
-const CACHE_NAME = "installment-pwa-v2";
+const CACHE_NAME = "installment-pwa-v3";
 const CORE_ASSETS = [
   "/",
   "/style.css",
