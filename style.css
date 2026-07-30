@@ -343,6 +343,12 @@ body {
   flex-wrap: wrap;
 }
 
+.row-day {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--navy);
+}
+
 .row-amount {
   font-weight: 700;
   font-size: 14px;

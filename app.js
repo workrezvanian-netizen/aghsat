@@ -260,6 +260,11 @@ function toPersianDigits(n) {
   return String(n).replace(/[0-9]/g, (d) => PERSIAN_DIGITS[d]);
 }
 
+function dueDayLabel(item) {
+  const day = parseInt(item.due_jalali.split("/")[2], 10);
+  return `${toPersianDigits(day)} ام`;
+}
+
 const ORDINAL_UNITS = ["", "اول", "دوم", "سوم", "چهارم", "پنجم", "ششم", "هفتم", "هشتم", "نهم"];
 const ORDINAL_UNITS_COMPOUND = ["", "یکم", "دوم", "سوم", "چهارم", "پنجم", "ششم", "هفتم", "هشتم", "نهم"];
 const ORDINAL_TEENS = ["دهم", "یازدهم", "دوازدهم", "سیزدهم", "چهاردهم", "پانزدهم", "شانزدهم", "هفدهم", "هجدهم", "نوزدهم"];
@@ -303,7 +308,7 @@ function renderInstallments(items) {
         <div class="row-meta">
           <span>${typeLabel}</span>
           <span>•</span>
-          <span>${item.due_jalali}</span>
+          <span class="row-day">${dueDayLabel(item)}</span>
           ${statusBadge(item)}
         </div>
         ${item.is_paid && item.paid_count > 0 ? `<div class="row-paid-count">قسط ${toPersianOrdinal(item.paid_count)}</div>` : ""}
