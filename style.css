@@ -318,6 +318,7 @@ body {
 
 .row.is-overdue::before { background: var(--red); }
 .row.is-paid::before { background: var(--green); }
+.row.is-paid { opacity: 0.55; }
 
 .row-main {
   flex: 1;

@@ -256,9 +256,25 @@ function statusBadge(item) {
 }
 
 const PERSIAN_DIGITS = ["۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"];
+const ARABIC_DIGITS = ["٠", "١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩"];
 function toPersianDigits(n) {
   return String(n).replace(/[0-9]/g, (d) => PERSIAN_DIGITS[d]);
 }
+function toEnglishDigits(str) {
+  return String(str)
+    .replace(/[۰-۹]/g, (d) => String(PERSIAN_DIGITS.indexOf(d)))
+    .replace(/[٠-٩]/g, (d) => String(ARABIC_DIGITS.indexOf(d)));
+}
+function formatAmountValue(raw) {
+  const digits = toEnglishDigits(raw).replace(/[^\d]/g, "");
+  if (!digits) return "";
+  return parseInt(digits, 10).toLocaleString("en-US");
+}
+
+const fAmountInput = document.getElementById("fAmount");
+fAmountInput.addEventListener("input", () => {
+  fAmountInput.value = formatAmountValue(fAmountInput.value);
+});
 
 function dueDayLabel(item) {
   const day = parseInt(item.due_jalali.split("/")[2], 10);
@@ -316,8 +332,8 @@ function renderInstallments(items) {
       </div>
       <div class="row-actions">
         ${!item.is_paid ? `<button class="icon-btn pay" title="ثبت پرداخت" data-action="pay" data-id="${item.id}" data-due="${item.due_key}">✓</button>` : ""}
-        <button class="icon-btn edit" title="ویرایش" data-action="edit" data-id="${item.id}">✏️</button>
-        <button class="icon-btn del" title="حذف" data-action="del" data-id="${item.id}">🗑</button>
+        <button class="icon-btn edit" title="ویرایش" data-action="edit" data-id="${item.id}"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-1 10-10-3-3L5 16l-1 4z"/><path d="M14 6l3 3"/></svg></button>
+        <button class="icon-btn del" title="حذف" data-action="del" data-id="${item.id}"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button>
       </div>
     `;
     ledger.appendChild(row);
@@ -434,7 +450,7 @@ function openEditSheet(item) {
   document.getElementById("submitBtn").textContent = "ذخیره تغییرات";
 
   document.getElementById("fTitle").value = item.title;
-  document.getElementById("fAmount").value = item.amount;
+  document.getElementById("fAmount").value = formatAmountValue(item.amount);
   setType(item.due_type);
 
   if (item.due_type === "monthly") {
@@ -516,7 +532,7 @@ addForm.addEventListener("submit", (e) => {
   errEl.hidden = true;
 
   const title = document.getElementById("fTitle").value.trim();
-  const amount = document.getElementById("fAmount").value.trim();
+  const amount = toEnglishDigits(document.getElementById("fAmount").value).replace(/[^\d]/g, "");
   const dueValue =
     currentType === "monthly"
       ? document.getElementById("fDueDay").value.trim()
