@@ -215,6 +215,12 @@ body {
   font-weight: 500;
 }
 
+#summaryMonth {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--navy);
+}
+
 .summary-amount {
   font-size: 28px;
   font-weight: 800;
